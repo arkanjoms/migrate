@@ -8,19 +8,17 @@ import (
 	sqldriver "database/sql/driver"
 	"errors"
 	"fmt"
-	"log"
-
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/golang-migrate/migrate/v4"
-
 	"github.com/dhui/dktest"
-
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database"
+
 	dt "github.com/golang-migrate/migrate/v4/database/testing"
 	"github.com/golang-migrate/migrate/v4/dktesting"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -41,6 +39,9 @@ var (
 		{ImageName: "postgres:10", Options: opts},
 		{ImageName: "postgres:11", Options: opts},
 		{ImageName: "postgres:12", Options: opts},
+		{ImageName: "postgres:13", Options: opts},
+		{ImageName: "postgres:14", Options: opts},
+		{ImageName: "postgres:15", Options: opts},
 	}
 )
 
@@ -115,6 +116,32 @@ func TestMigrate(t *testing.T) {
 		}
 
 		addr := pgConnectionString(ip, port)
+		p := &Postgres{}
+		d, err := p.Open(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := d.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		m, err := migrate.NewWithDatabaseInstance("file://./examples/migrations", "pgx", d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dt.TestMigrate(t, m)
+	})
+}
+
+func TestMigrateLockTable(t *testing.T) {
+	dktesting.ParallelTest(t, specs, func(t *testing.T, c dktest.ContainerInfo) {
+		ip, port, err := c.FirstPort()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		addr := pgConnectionString(ip, port, "x-lock-strategy=table", "x-lock-table=lock_table")
 		p := &Postgres{}
 		d, err := p.Open(addr)
 		if err != nil {
